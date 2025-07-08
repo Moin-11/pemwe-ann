@@ -1,0 +1,30 @@
+{
+  "selected_architecture": {
+    "hidden_layer_sizes": [
+      8,
+      8
+    ],
+    "selected_based_on": "80% training set CV"
+  },
+  "pass_a_full_data_cv": {
+    "best_architecture": [
+      8,
+      8
+    ],
+    "r2_score": 0.9927888565413656,
+    "rmse": 28.889106246509602,
+    "mae": 7.4101167537265935
+  },
+  "pass_b_training_cv": {
+    "r2_score": 0.9839557976657888,
+    "rmse": 50.65231977213201,
+    "mae": 11.209643936884891,
+    "nrmse": 0.010130463952400309,
+    "nmae": 0.0022419287869285924
+  },
+  "pass_b_test_set": {
+    "r2_score": 0.9948609791719861,
+    "rmse": 15.72324874426793,
+    "mae": 5.81886272387897
+  }
+}
