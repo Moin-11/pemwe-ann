@@ -6,22 +6,17 @@ This repository contains implementations for Artificial Neural Network (ANN) and
 
 ### Using Conda (Recommended)
 
-1. Create the conda environment:
-```bash
-conda env create -f environment.yml
-```
+# 1. install lockfile solver
 
-2. Activate the environment:
-```bash
+conda install -c conda-forge conda-lock
+
+# 2. create env from lock
+
+conda-lock install --name pemwe-ann conda-lock.yml
+
+# 3. activate conda env
+
 conda activate pemwe-ann
-```
-
-### Alternative: Using pip
-
-If you prefer to use pip, install the requirements:
-```bash
-pip install -r ANN/requirements.txt
-```
 
 ## Data
 
@@ -39,21 +34,25 @@ python run.py --help
 ### Available ANN Commands:
 
 1. **Explore**: Exploratory data analysis and pipeline preview
+
 ```bash
 python run.py explore
 ```
 
 2. **Tune**: Hyperparameter tuning with cross-validation
+
 ```bash
 python run.py tune
 ```
 
 3. **SHAP**: SHAP analysis for feature importance
+
 ```bash
 python run.py shap
 ```
 
 ### Using custom dataset:
+
 ```bash
 python run.py explore --csv path/to/your/dataset.csv
 ```
@@ -70,26 +69,31 @@ python run.py --help
 ### Available RSM Commands:
 
 1. **Data Info**: Generate data statistics and information
+
 ```bash
 python run.py data-info
 ```
 
 2. **RSM Equation**: Generate RSM equation and analysis
+
 ```bash
 python run.py rsm-equation
 ```
 
 3. **Surface Plots**: Generate surface scatter plots
+
 ```bash
 python run.py surface-plots --var1 "Cell voltage (V)" --var2 "Cell current (A)"
 ```
 
 4. **All**: Run all RSM analyses
+
 ```bash
 python run.py all
 ```
 
 ### Using custom dataset:
+
 ```bash
 python run.py data-info --csv path/to/your/dataset.csv
 ```
@@ -99,6 +103,7 @@ python run.py data-info --csv path/to/your/dataset.csv
 All analysis outputs are saved to the `outputs/` folder in the root directory:
 
 ### ANN Outputs:
+
 - `best_config.json`: Best hyperparameters and performance metrics
 - `trained_model.pkl`: Trained model pipeline
 - `tuning_results_full_data.csv`: Full dataset cross-validation results
@@ -107,6 +112,7 @@ All analysis outputs are saved to the `outputs/` folder in the root directory:
 - `corr_heatmap.png`: Correlation heatmap
 
 ### RSM Outputs:
+
 - `rsm_actual_vs_predicted.png`: Actual vs predicted values plot
 - `rsm_residuals_vs_predicted.png`: Residuals vs predicted values plot
 - `rsm_qq_plot.png`: Q-Q plot for residuals
@@ -135,7 +141,9 @@ pemwe-ann/
 To reproduce the results:
 
 ### Quick Start (Recommended)
+
 Run all analyses with a single command:
+
 ```bash
 python3 run_all_analyses.py
 ```
@@ -143,6 +151,7 @@ python3 run_all_analyses.py
 This will run all ANN and RSM analyses and generate all outputs automatically.
 
 ### Manual Execution
+
 1. Set up the environment as described above
 2. Run the ANN analysis:
    ```bash
@@ -162,6 +171,7 @@ All outputs will be generated in the `outputs/` folder for review and verificati
 ## Notes
 
 - The dataset must contain the following columns:
+
   - `Cathode area (mm2)`
   - `Anode area (mm2)`
   - `Cell voltage (V)`
