@@ -48,52 +48,58 @@ python run.py explore
 - Console output showing skewed columns analysis and pipeline steps
 
 ### 2. Tune
-**Purpose**: Two-pass hyperparameter tuning and model evaluation
+**Purpose**: Tuning to find best model and evaluation
 ```bash
 python run.py tune
 ```
 
-**Two-Pass Workflow**:
+**Workflow**:
 
-**Pass A: Full-data 5-fold CV → Table 1 (unchanged values)**
+**5-fold Cross-Validation for Architecture Selection**
 - Tests all 8 architectures using 5-fold stratified cross-validation on 100% of data
-- Provides comprehensive performance overview (unchanged methodology)
+- Provides comprehensive performance overview for architecture selection
 
-**Pass B: 80/20 split → Inner CV → Best selection → Final evaluation**
+**Final Model Training and Evaluation**
+- Takes the winning architecture from cross-validation
 - Creates 80/20 stratified split
-- Performs inner 5-fold CV on training set (80%) for all architectures
-- Selects best architecture based on training set CV performance
-- Retrains best model on full training set (80%)
+- Trains final model with the chosen config on training set (80%)
 - Evaluates once on held-out test set (20%)
 
 **Architectures tested**: (8,4), (8,8), (16,8), (16,16), (32,16), (32,32), (64,32), (64,64)
 
 **Outputs**:
-- `outputs/tuning_results_full_data.csv` - Pass A: Full dataset CV results
-- `outputs/tuning_results_training_set.csv` - Pass B: Training set (80%) CV results
-- `outputs/best_config.json` - Comprehensive results from both passes
-- `outputs/trained_model.pkl` - Final trained model (selected from Pass B)
-- **Test set plots** (displayed) - Honest evaluation plots using 20% test data
+- `outputs/best_config.json` - Comprehensive results from both stages
+- `outputs/predictions.png` - Actual vs predicted values plot
+- `outputs/residuals.png` - Residuals vs predicted values plot
 
 ### 3. SHAP Analysis
-**Purpose**: Feature importance analysis
+**Purpose**: Feature importance analysis using methodologically sound approach
 ```bash
 python run.py shap
 ```
 
 **What it does**:
-- Requires a trained model (run `train` first)
-- Performs SHAP analysis on engineered features
-- Generates feature importance plots
+- Requires a trained model (run `tune` first)
+- Creates an **80/20 split** (matches tune command methodology)
+- Uses **training data (80%) for SHAP background** and **test data (20%) for explanations**
+- Explains model behavior on unseen data for generalization insights
+- Shows how the model interprets new samples
+
+**Methodological Benefits**:
+- Explains genuine feature importance for unseen data
+- Consistent with standard SHAP practice (train background + test explanations)
+- More informative than training-only explanations
+- Fully consistent with tune command split
 
 **Outputs**:
-- `outputs/shap_ann_summary.png` - SHAP feature importance plot
+- `outputs/shap_ann_summary.png` - SHAP feature importance plot (test data explanations)
+
 
 ## Complete Workflow
 
 ```bash
 python run.py explore    # EDA and pipeline preview
-python run.py tune       # Hyperparameter tuning with test evaluation and plots
+python run.py tune       # Exhaustive search with test evaluation and plots
 python run.py shap       # Feature importance analysis
 ```
 
@@ -110,11 +116,10 @@ python run.py shap       # Feature importance analysis
 All results are saved in the `outputs/` directory:
 
 - `corr_heatmap.png` - Feature correlation heatmap
-- `tuning_results_full_data.csv` - Pass A: Full dataset CV results
-- `tuning_results_training_set.csv` - Pass B: Training set CV results
-- `best_config.json` - Comprehensive results from both passes
-- `trained_model.pkl` - Final trained scikit-learn pipeline
-- `shap_ann_summary.png` - SHAP feature importance plot
+- `best_config.json` - Comprehensive results from both stages
+- `predictions.png` - Actual vs predicted values plot
+- `residuals.png` - Residuals vs predicted values plot
+- `shap_ann_summary.png` - SHAP feature importance plot (test data explanations)
 
 ## Dataset
 

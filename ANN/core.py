@@ -12,7 +12,6 @@ from sklearn.model_selection import StratifiedKFold, cross_validate
 import pathlib
 import warnings
 
-# Global settings
 SEED = 42
 os.environ["PYTHONHASHSEED"] = str(SEED)
 os.environ["TF_DETERMINISTIC_OPS"] = "1"
@@ -30,7 +29,6 @@ OUT_DIR.mkdir(exist_ok=True)
 SAVE_AS_SVG = False
 IMG_EXT = "svg" if SAVE_AS_SVG else "png"
 
-# Columns to gaussianize
 SKEWED_COLS = [
     "Temperature_Power_Interaction",
     "Power (w)",
@@ -46,16 +44,13 @@ SKEWED_COLS = [
     "Water_Excess_mol",
 ]
 
-# Scorers
 scorers = {
     "rmse": make_scorer(lambda y, yhat: np.sqrt(mean_squared_error(y, yhat)), greater_is_better=False),
     "mae": make_scorer(mean_absolute_error, greater_is_better=False),
     "r2": make_scorer(r2_score),
 }
 
-# Feature engineering transformer
 class PEMWEFeatureEngineer(BaseEstimator, TransformerMixin):
-    """Add physics‑aware & reviewer‑requested engineered features."""
     def fit(self, X, y=None):
         return self
 
@@ -76,22 +71,18 @@ class PEMWEFeatureEngineer(BaseEstimator, TransformerMixin):
         df["Temperature_Voltage_Interaction"] = T * V
         df["Temperature_WaterFlow_Interaction"] = T * Wf
 
-        # Faraday-law H₂ molar rate (mol/min)
         F = 96_485.33212  # C·mol⁻¹
         n_h2 = (I * 60) / (2 * F)
 
-        # Faraday-law theoretical hydrogen production (mL/min)
         F, R = 96_485.33212, 0.082057366  # C·mol⁻¹, L·atm·K⁻¹·mol⁻¹
         n_h2 = (I * 60) / (2 * F)
         df["Theoretical_H2_Production"] = n_h2 * R * T * 1e3
 
-        # water utilization & excess (mol)
         dens, M = 1.0, 18.015  # g/mL, g/mol
         n_h2o = Wf * dens / M
         df["Water_Utilization"] = n_h2 / (n_h2o + EPS)
         df["Water_Excess_mol"] = n_h2o - n_h2
 
-        # Quadratic self‑terms
         for col in [
             "Cell voltage (V)",
             "Cell current (A)",
@@ -102,7 +93,6 @@ class PEMWEFeatureEngineer(BaseEstimator, TransformerMixin):
         df.replace([np.inf, -np.inf], np.nan, inplace=True)
         return df
 
-# Impute transformer
 class MedianImputer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         self.medians_ = X.median()
@@ -111,9 +101,7 @@ class MedianImputer(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         return X.fillna(self.medians_)
 
-# Selective quantile transformer
 class SelectiveQuantile(BaseEstimator, TransformerMixin):
-    """Apply QuantileTransformer(normal) to specified columns."""
     def __init__(self, cols: list[str], n_quantiles: int, random_state=None):
         self.cols = cols
         self.n_quantiles = n_quantiles
@@ -135,7 +123,6 @@ class SelectiveQuantile(BaseEstimator, TransformerMixin):
         return df
 
 
-# Plot helpers
 def save_corr(df: pd.DataFrame):
     plt.figure(figsize=(13, 11))
     sns.heatmap(df.corr(numeric_only=True), cmap="coolwarm", center=0, linewidths=0.4, annot=True, fmt=".2f")
@@ -153,23 +140,26 @@ def save_corr(df: pd.DataFrame):
         .drop(columns=["ordered_pair"])
         .sort_values("Correlation", ascending=False)
     )
-    print("[INFO] All correlation pairs:")
+    print("All correlation pairs:")
     print(all_corr.to_string(index=False))
 
     plt.tight_layout()
     plt.savefig(OUT_DIR / f"corr_heatmap.{IMG_EXT}", bbox_inches="tight")
     plt.close()
 
-# SHAP helper
 def save_shap_engineered(rest_pipeline: Pipeline, ann_model: MLPRegressor,
                           X_train_eng: pd.DataFrame, X_explain_eng: pd.DataFrame):
     try:
         import shap
     except ImportError:
-        print("[INFO] shap not installed – skipping SHAP plot")
+        print("shap not installed – skipping SHAP plot")
         return
 
-    background = shap.sample(X_train_eng, 100, random_state=SEED)
+    print(f"Running SHAP analysis:")
+    print(f"Background: {len(X_train_eng)} training samples")
+    print(f"Explanations: {len(X_explain_eng)} test samples")
+    
+    background = shap.sample(X_train_eng, min(100, len(X_train_eng)), random_state=SEED)
     cols = X_train_eng.columns
     expl = shap.KernelExplainer(
         lambda dat: ann_model.predict(
@@ -178,20 +168,20 @@ def save_shap_engineered(rest_pipeline: Pipeline, ann_model: MLPRegressor,
         background,
         seed=SEED,
     )
+    
     shap_values = expl.shap_values(X_explain_eng, nsamples="auto")
     plt.figure(figsize=(11, 6))
     shap.summary_plot(shap_values, X_explain_eng, plot_type="bar", show=False)
+    plt.xlabel("Mean(|SHAP value|)", fontsize=10)
     plt.xticks(fontsize=8)
     plt.tight_layout()
     plt.savefig(OUT_DIR / f"shap_ann_summary.{IMG_EXT}", bbox_inches="tight")
     plt.close()
+    
+    print(f"SHAP analysis explains model behavior on test data (unseen samples)")
 
-# Utility functions
+
 def high_skew_cols(df: pd.DataFrame, thresh: float = 3.0, min_corr: float = 0.9) -> list[str]:
-    """
-    Return columns whose |skew|>thresh but not >min_corr correlated
-    with any already selected.
-    """
     skew = df.select_dtypes(include=np.number).skew().abs()
     ranked = skew[skew > thresh].sort_values(ascending=False).index
     selected: list[str] = []
@@ -201,7 +191,6 @@ def high_skew_cols(df: pd.DataFrame, thresh: float = 3.0, min_corr: float = 0.9)
     return selected
 
 def cross_validate_model(X: pd.DataFrame, y: pd.Series, neurons_list: list[list[int]]) -> pd.DataFrame:
-    """Cross-validate different neural network architectures."""
     bins = pd.qcut(y, q=5, labels=False, duplicates="drop")
     splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
     splits = list(splitter.split(X, bins))
@@ -234,6 +223,8 @@ def cross_validate_model(X: pd.DataFrame, y: pd.Series, neurons_list: list[list[
 
         rmse = (-cv_res["test_rmse"]).mean()
         mae = (-cv_res["test_mae"]).mean()
+        r2 = cv_res["test_r2"].mean()
+        
         results.append({
             "Layer1": h1,
             "Layer2": h2,
@@ -241,12 +232,11 @@ def cross_validate_model(X: pd.DataFrame, y: pd.Series, neurons_list: list[list[
             "MAE": mae,
             "NRMSE": rmse / y_range,
             "NMAE": mae / y_range,
-            "R2": cv_res["test_r2"].mean(),
+            "R2": r2,
         })
     return pd.DataFrame(results)
 
 def create_pipeline(hidden_layer_sizes=(8, 8), max_iter=10000, n_quantiles=200, data_len=None):
-    """Create a standardized pipeline."""
     if data_len is not None:
         n_quantiles = min(n_quantiles, data_len)
     
@@ -266,7 +256,6 @@ def create_pipeline(hidden_layer_sizes=(8, 8), max_iter=10000, n_quantiles=200, 
     ])
 
 def plot_predictions(y_true, y_pred, title="Actual vs Predicted"):
-    """Plot actual vs predicted values."""
     plt.figure(figsize=(6, 6))
     plt.scatter(y_true, y_pred, alpha=0.6)
     lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
@@ -275,10 +264,11 @@ def plot_predictions(y_true, y_pred, title="Actual vs Predicted"):
     plt.ylabel(f"Predicted {TARGET}")
     plt.title(title)
     plt.tight_layout()
+    plt.savefig(OUT_DIR / f"predictions.{IMG_EXT}", bbox_inches="tight")
     plt.show()
+    plt.close()
 
 def plot_residuals(y_true, y_pred, title="Residuals vs Predicted"):
-    """Plot residuals."""
     residuals = y_true - y_pred
     plt.figure(figsize=(6, 4))
     plt.scatter(y_pred, residuals, alpha=0.6)
@@ -287,10 +277,11 @@ def plot_residuals(y_true, y_pred, title="Residuals vs Predicted"):
     plt.ylabel("Residuals")
     plt.title(title)
     plt.tight_layout()
+    plt.savefig(OUT_DIR / f"residuals.{IMG_EXT}", bbox_inches="tight")
     plt.show()
+    plt.close()
 
 def setup_warnings():
-    """Setup warning filters."""
     warnings.filterwarnings("ignore", category=UserWarning)
     warnings.filterwarnings("ignore", category=RuntimeWarning)
     warnings.filterwarnings(

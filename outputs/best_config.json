@@ -1,30 +1,30 @@
 {
+  "methodology": "Architecture selection via 5-fold CV, final model training on 80/20 split",
   "selected_architecture": {
     "hidden_layer_sizes": [
       8,
       8
     ],
-    "selected_based_on": "80% training set CV"
+    "selected_based_on": "5-fold cross-validation"
   },
-  "pass_a_full_data_cv": {
+  "cross_validation": {
     "best_architecture": [
       8,
       8
     ],
     "r2_score": 0.9927888565413656,
     "rmse": 28.889106246509602,
-    "mae": 7.4101167537265935
+    "mae": 7.4101167537265935,
+    "nrmse": 0.005777821248146356,
+    "nmae": 0.0014820233504489139
   },
-  "pass_b_training_cv": {
-    "r2_score": 0.9839557976657888,
-    "rmse": 50.65231977213201,
-    "mae": 11.209643936884891,
-    "nrmse": 0.010130463952400309,
-    "nmae": 0.0022419287869285924
-  },
-  "pass_b_test_set": {
-    "r2_score": 0.9948609791719861,
-    "rmse": 15.72324874426793,
-    "mae": 5.81886272387897
+  "final_model": {
+    "training_data_size": 476,
+    "test_data_size": 120,
+    "test_r2_score": 0.9948609791719861,
+    "test_rmse": 15.72324874426793,
+    "test_mae": 5.81886272387897,
+    "test_nrmse": 0.009930493791147415,
+    "test_nmae": 0.0036750789287159917
   }
 }

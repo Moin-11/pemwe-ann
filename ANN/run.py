@@ -13,14 +13,12 @@ from core import (
 )
 
 def tune_command(args):
-    """Hyperparameter tuning command."""
-    print("[INFO] Starting hyperparameter tuning...")
+    print("Starting tuning to find the best model...")
     
     df = pd.read_csv(args.csv)
     X = df.drop(TARGET, axis=1)
     y = df[TARGET]
     
-    # Default neuron configurations
     neurons_list = [
         [8, 4], [8, 8],
         [16, 8], [16, 16],
@@ -28,87 +26,68 @@ def tune_command(args):
         [64, 32], [64, 64],
     ]
     
-    # =========================================================================
-    # PASS A: Full-data 5-fold CV → Table 1 (unchanged values)
-    # =========================================================================
-    print("[INFO] PASS A: Full-data 5-fold CV...")
+    print("5-fold cross-validation for architecture selection...")
     results_full = cross_validate_model(X, y, neurons_list)
     
-    # Display and save Pass A results
-    print("\n--- PASS A: Full Dataset CV Results ---")
+    print("\n--- 5-fold Cross-Validation Results ---")
     with pd.option_context('display.float_format', '{:.4f}'.format):
         print(results_full)
     
-    results_full.to_csv(OUT_DIR / "tuning_results_full_data.csv", index=False)
     
-    # =========================================================================
-    # PASS B: 80/20 split → inner 5-fold CV on 80% → pick best → retrain → evaluate on 20%
-    # =========================================================================
-    print("\n[INFO] PASS B: 80/20 split for hyperparameter selection...")
+    best_full = results_full.loc[results_full["R2"].idxmax()]
+    best_h1, best_h2 = int(best_full["Layer1"]), int(best_full["Layer2"])
+    print(f"\nSelected architecture: layers=({best_h1},{best_h2}), R2={best_full['R2']:.4f}")
     
-    # 80/20 split
+    print("\nTraining final model with selected architecture...")
+    
     y_bins = pd.qcut(y, q=5, duplicates="drop", labels=False)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.20, random_state=SEED, stratify=y_bins
     )
     
-    # Inner 5-fold CV on the 80% training set
-    print("[INFO] Inner 5-fold CV on 80% training set...")
-    results_train = cross_validate_model(X_train, y_train, neurons_list)
+    print(f"80/20 split created: {len(X_train)} train, {len(X_test)} test samples")
     
-    # Display Pass B inner CV results
-    print("\n--- PASS B: Training Set (80%) CV Results ---")
-    with pd.option_context('display.float_format', '{:.4f}'.format):
-        print(results_train)
+    print(f"Training ({best_h1},{best_h2}) model on 80% data...")
+    final_pipe = create_pipeline((best_h1, best_h2), max_iter=800, data_len=len(X_train))
+    final_pipe.fit(X_train, y_train)
     
-    results_train.to_csv(OUT_DIR / "tuning_results_training_set.csv", index=False)
+    print("Final evaluation on 20% test set...")
+    y_pred_test = final_pipe.predict(X_test)
     
-    # Pick best hyperparameters based on 80% CV
-    best_train = results_train.loc[results_train["R2"].idxmax()]
-    best_h1, best_h2 = int(best_train["Layer1"]), int(best_train["Layer2"])
-    print(f"\nBest config from 80% CV: layers=({best_h1},{best_h2}), R2={best_train['R2']:.4f}")
-    
-    # Retrain on 80% with best hyperparameters
-    print("[INFO] Retraining best model on 80% training set...")
-    best_pipe = create_pipeline((best_h1, best_h2), max_iter=800, data_len=len(X_train))
-    best_pipe.fit(X_train, y_train)
-    
-    # Evaluate once on 20% test set
-    print("[INFO] Final evaluation on 20% test set...")
-    y_pred_test = best_pipe.predict(X_test)
-    
-    # Calculate test metrics
     test_rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
     test_mae = mean_absolute_error(y_test, y_pred_test)
     test_r2 = r2_score(y_test, y_pred_test)
     
-    print(f"\n--- PASS B: Final Test Set (20%) Results ---")
-    print(f"Test Set - RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, R2: {test_r2:.4f}")
+    y_range = y_test.max() - y_test.min() + EPS
+    test_nrmse = test_rmse / y_range
+    test_nmae = test_mae / y_range
     
-    # Save comprehensive results
+    print(f"\n--- Final Model Evaluation Results ---")
+    print(f"RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, R2: {test_r2:.4f}")
+    print(f"NRMSE: {test_nrmse:.4f}, NMAE: {test_nmae:.4f}")
+    
     best_config = {
+        "methodology": "Architecture selection via 5-fold CV, final model training on 80/20 split",
         "selected_architecture": {
             "hidden_layer_sizes": [best_h1, best_h2],
-            "selected_based_on": "80% training set CV"
+            "selected_based_on": "5-fold cross-validation"
         },
-        "pass_a_full_data_cv": {
-            "best_architecture": [int(results_full.loc[results_full["R2"].idxmax(), "Layer1"]), 
-                                 int(results_full.loc[results_full["R2"].idxmax(), "Layer2"])],
-            "r2_score": float(results_full.loc[results_full["R2"].idxmax(), "R2"]),
-            "rmse": float(results_full.loc[results_full["R2"].idxmax(), "RMSE"]),
-            "mae": float(results_full.loc[results_full["R2"].idxmax(), "MAE"])
+        "cross_validation": {
+            "best_architecture": [best_h1, best_h2],
+            "r2_score": float(best_full['R2']),
+            "rmse": float(best_full['RMSE']),
+            "mae": float(best_full['MAE']),
+            "nrmse": float(best_full['NRMSE']),
+            "nmae": float(best_full['NMAE'])
         },
-        "pass_b_training_cv": {
-            "r2_score": float(best_train['R2']),
-            "rmse": float(best_train['RMSE']),
-            "mae": float(best_train['MAE']),
-            "nrmse": float(best_train['NRMSE']),
-            "nmae": float(best_train['NMAE'])
-        },
-        "pass_b_test_set": {
-            "r2_score": float(test_r2),
-            "rmse": float(test_rmse),
-            "mae": float(test_mae)
+        "final_model": {
+            "training_data_size": len(X_train),
+            "test_data_size": len(X_test),
+            "test_r2_score": float(test_r2),
+            "test_rmse": float(test_rmse),
+            "test_mae": float(test_mae),
+            "test_nrmse": float(test_nrmse),
+            "test_nmae": float(test_nmae)
         }
     }
     
@@ -116,78 +95,79 @@ def tune_command(args):
     with open(OUT_DIR / "best_config.json", 'w') as f:
         json.dump(best_config, f, indent=2)
     
-    # Create plots using test set predictions
-    plot_predictions(y_test, y_pred_test, f"Test Set: Actual vs Predicted {(best_h1, best_h2)}")
-    plot_residuals(y_test, y_pred_test, f"Test Set: Residuals vs Predicted {(best_h1, best_h2)}")
+    plot_predictions(y_test, y_pred_test, f"Actual vs Predicted {(best_h1, best_h2)}")
+    plot_residuals(y_test, y_pred_test, f"Residuals vs Predicted {(best_h1, best_h2)}")
     
-    # Save model pipeline
-    import joblib
-    joblib.dump(best_pipe, OUT_DIR / "trained_model.pkl")
-    
-    print(f"\n[INFO] Pass A results saved to {OUT_DIR}/tuning_results_full_data.csv")
-    print(f"[INFO] Pass B results saved to {OUT_DIR}/tuning_results_training_set.csv")
-    print(f"[INFO] Best config saved to {OUT_DIR}/best_config.json")
-    print(f"[INFO] Model saved to {OUT_DIR}/trained_model.pkl")
+    print(f"Configuration saved to {OUT_DIR}/best_config.json")
+    print(f"Prediction plots saved to {OUT_DIR}/predictions.png and {OUT_DIR}/residuals.png")
 
 
 def shap_command(args):
-    """SHAP analysis command."""
-    print("[INFO] Starting SHAP analysis...")
+    print("Starting SHAP analysis...")
     
-    # Load trained model
-    model_path = OUT_DIR / "trained_model.pkl"
-    if not model_path.exists():
-        print("[ERROR] No trained model found. Please run 'train' command first.")
+    config_path = OUT_DIR / "best_config.json"
+    if not config_path.exists():
+        print("ERROR: No configuration found. Please run 'tune' command first.")
         return
     
-    import joblib
-    pipe = joblib.load(model_path)
+    import json
     
-    # Load data
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
     df = pd.read_csv(args.csv)
     X = df.drop(TARGET, axis=1)
     y = df[TARGET]
     
-    # Get engineered features from full dataset
-    X_eng = pipe.named_steps["eng"].transform(X)
+    print(f"Creating 80/20 split for SHAP analysis...")
     
-    # Use already fitted preprocessing pipeline (without ANN for SHAP)
-    preprocessing_pipeline = pipe[:-1]  # All steps except ANN, already fitted
+    y_bins = pd.qcut(y, q=5, duplicates="drop", labels=False)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.20, random_state=SEED, stratify=y_bins
+    )
     
-    # Run SHAP analysis
+    print(f"Using 80/20 split for SHAP: {len(X_train)} train, {len(X_test)} test samples")
+    
+    best_arch = config["selected_architecture"]["hidden_layer_sizes"]
+    pipe = create_pipeline(tuple(best_arch), max_iter=800, data_len=len(X_train))
+    pipe.fit(X_train, y_train)
+    print(f"Recreated model with architecture {best_arch}")
+    
+    X_train_eng = pipe.named_steps["eng"].transform(X_train)
+    X_test_eng = pipe.named_steps["eng"].transform(X_test)
+    
+    preprocessing_pipeline = pipe[1:-1]  # All steps except ANN, already fitted
+    
     save_shap_engineered(
         preprocessing_pipeline,
         pipe.named_steps["ann"],
-        X_eng,
-        X_eng  # Use full dataset for explanation
+        X_train_eng,
+        X_test_eng
     )
     
-    print(f"[INFO] SHAP analysis saved to {OUT_DIR}/shap_ann_summary.png")
+    print(f"SHAP analysis saved to {OUT_DIR}/shap_ann_summary.png")
+    print(f"Analysis explains model behavior on {len(X_test_eng)} test samples")
+
 
 def explore_command(args):
-    """Quick, unsupervised EDA & pipeline preview."""
-    print("[INFO] Starting exploratory analysis...")
+    print("Starting exploratory analysis...")
     df = pd.read_csv(args.csv)
     X = df.drop(TARGET, axis=1)
 
-    # --- 1. basic EDA ---
     save_corr(X)  # heat-map
-    print("[INFO] High-skew cols:", high_skew_cols(X))
-    print("[INFO] Nulls per column:\n", X.isna().sum())
+    print("High-skew cols:", high_skew_cols(X))
+    print("Nulls per column:\n", X.isna().sum())
 
-    # --- 2. pipeline step-by-step ---
-    # build *preprocessing* part only
     preview_pipe = create_pipeline(hidden_layer_sizes=(1,), max_iter=1)
-    preview_pipe.steps.pop()  # remove the ANN layer
+    preview_pipe.steps.pop()
 
-    preview_pipe.fit(X)  # unsupervised, so fine
+    preview_pipe.fit(X)
     X_eng = preview_pipe.named_steps["eng"].transform(X)
     print("\nAfter feature engineering:", X_eng.shape)
     print(X_eng.head())
 
-    # Show skewness analysis on engineered features
     auto_cols = high_skew_cols(X_eng, thresh=3.0, min_corr=0.99)
-    print("\n[INFO] Auto‐selected skewed cols:", auto_cols)
+    print("\nAuto‐selected skewed cols:", auto_cols)
     
     skew_table = (
         X_eng
@@ -197,7 +177,7 @@ def explore_command(args):
         .sort_values(ascending=False)
         .to_frame("abs_skew")
     )
-    print("\n[INFO] Feature skewness:\n", skew_table)
+    print("\nFeature skewness:\n", skew_table)
 
     X_imp = preview_pipe.named_steps["impute"].transform(X_eng)
     print("\nAfter imputation:", X_imp.shape)
@@ -211,7 +191,7 @@ def explore_command(args):
     print("\nAfter scaling:", X_scaled.shape)
     print(pd.DataFrame(X_scaled, columns=X_imp.columns).head())
 
-    print("[INFO] Exploration complete. Nothing was tuned or trained.")
+    print("Exploration complete. Nothing was tuned or trained.")
 
 def main():
     setup_warnings()
@@ -227,7 +207,7 @@ def main():
     explore_parser.set_defaults(func=explore_command)
     
     # Tune command
-    tune_parser = subparsers.add_parser("tune", help="Hyperparameter tuning")
+    tune_parser = subparsers.add_parser("tune", help="Tuning to find best model")
     tune_parser.set_defaults(func=tune_command)
     
     # SHAP command
@@ -240,12 +220,10 @@ def main():
         parser.print_help()
         return
     
-    # Check if CSV exists
     if not args.csv.exists():
-        print(f"[ERROR] CSV file not found: {args.csv}")
+        print(f"ERROR: CSV file not found: {args.csv}")
         return
     
-    # Run the appropriate command
     args.func(args)
 
 if __name__ == "__main__":
