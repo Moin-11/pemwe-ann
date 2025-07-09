@@ -1,18 +1,10 @@
-name: pemwe-ann
+name: h2ann312
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.12
-  - pip=25.1.1
-  - numpy=2.1.3
-  - pandas=2.3.0
-  - scikit-learn=1.7.0
-  - matplotlib=3.10.3
-  - seaborn=0.13.2
-  - scipy=1.16.0
-  - joblib=1.5.1
-  - setuptools=80.9.0
-  - wheel=0.45.1
-  - pip:
-      - shap==0.48.0
+  - python=3.12.10
+  - seaborn
+  - pandas
+  - scipy
+  - numpy
+  - matplotlib
