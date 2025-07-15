@@ -44,10 +44,24 @@ SKEWED_COLS = [
     "Water_Excess_mol",
 ]
 
+def smape(y_true, y_pred, eps: float = 1e-6):
+    num   = np.abs(y_pred - y_true)
+    denom = (np.abs(y_true) + np.abs(y_pred) + eps) / 2.0
+    return np.mean(num / denom)
+
+def mape_above_thresh(y_true, y_pred, thresh: float = 5.0, eps: float = 1e-6):
+    y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
+    mask = np.abs(y_true) >= thresh
+    if mask.sum() == 0:
+        return np.nan
+    return np.mean(np.abs((y_pred[mask] - y_true[mask]) / (np.abs(y_true[mask]) + eps)))
+
 scorers = {
-    "rmse": make_scorer(lambda y, yhat: np.sqrt(mean_squared_error(y, yhat)), greater_is_better=False),
-    "mae": make_scorer(mean_absolute_error, greater_is_better=False),
-    "r2": make_scorer(r2_score),
+    "rmse":  make_scorer(lambda y, yh: np.sqrt(mean_squared_error(y, yh)), greater_is_better=False),
+    "mae":   make_scorer(mean_absolute_error, greater_is_better=False),
+    "r2":    make_scorer(r2_score),
+    "smape": make_scorer(smape, greater_is_better=False),
+    "mape5": make_scorer(mape_above_thresh, greater_is_better=False),
 }
 
 class PEMWEFeatureEngineer(BaseEstimator, TransformerMixin):
@@ -221,18 +235,22 @@ def cross_validate_model(X: pd.DataFrame, y: pd.Series, neurons_list: list[list[
             n_jobs=1
         )
 
-        rmse = (-cv_res["test_rmse"]).mean()
-        mae = (-cv_res["test_mae"]).mean()
-        r2 = cv_res["test_r2"].mean()
+        rmse   = (-cv_res["test_rmse"]).mean()
+        mae    = (-cv_res["test_mae"]).mean()
+        smp    = (-cv_res["test_smape"]).mean()
+        m5     = (-cv_res["test_mape5"]).mean()
+        r2     =  cv_res["test_r2"].mean()
         
         results.append({
             "Layer1": h1,
             "Layer2": h2,
-            "RMSE": rmse,
-            "MAE": mae,
-            "NRMSE": rmse / y_range,
-            "NMAE": mae / y_range,
-            "R2": r2,
+            "RMSE":   rmse,
+            "MAE":    mae,
+            "SMAPE":  smp,
+            "MAPE5":  m5,
+            "NRMSE":  rmse / y_range,
+            "NMAE":   mae  / y_range,
+            "R2":     r2,
         })
     return pd.DataFrame(results)
 

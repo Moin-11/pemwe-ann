@@ -4,18 +4,28 @@ import argparse
 import pathlib
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_predict
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from core import (
-    SEED, TARGET, EPS, OUT_DIR, setup_warnings, save_corr, 
-    cross_validate_model, create_pipeline, plot_predictions, 
-    plot_residuals, save_shap_engineered, high_skew_cols
+    SEED, TARGET, EPS, OUT_DIR, setup_warnings, save_corr,
+    cross_validate_model, create_pipeline, plot_predictions,
+    plot_residuals, save_shap_engineered, high_skew_cols,
+    smape, mape_above_thresh
 )
+from sklearn.model_selection import train_test_split
+
 
 def tune_command(args):
     print("Starting tuning to find the best model...")
     
     df = pd.read_csv(args.csv)
+    # --- diagnose raw target distribution (no pipeline) ---
+    y = df[TARGET]
+    print("Raw target distribution:")
+    print(y.describe())
+    for th in [0.1, 1, 5]:
+        pct = (y < th).mean() * 100
+        print(f"{pct:5.1f}% of samples have {TARGET} < {th} mL/min")
+    # ------------------------------------------------------
     X = df.drop(TARGET, axis=1)
     y = df[TARGET]
     
@@ -56,6 +66,8 @@ def tune_command(args):
     
     test_rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
     test_mae = mean_absolute_error(y_test, y_pred_test)
+    test_smape = smape(y_test, y_pred_test)
+    test_mape5 = mape_above_thresh(y_test, y_pred_test)
     test_r2 = r2_score(y_test, y_pred_test)
     
     y_range = y_test.max() - y_test.min() + EPS
@@ -63,7 +75,7 @@ def tune_command(args):
     test_nmae = test_mae / y_range
     
     print(f"\n--- Final Model Evaluation Results ---")
-    print(f"RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, R2: {test_r2:.4f}")
+    print(f"RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, SMAPE: {test_smape:.4f}, MAPE5: {test_mape5:.4f}, R2: {test_r2:.4f}")
     print(f"NRMSE: {test_nrmse:.4f}, NMAE: {test_nmae:.4f}")
     
     best_config = {
@@ -78,7 +90,9 @@ def tune_command(args):
             "rmse": float(best_full['RMSE']),
             "mae": float(best_full['MAE']),
             "nrmse": float(best_full['NRMSE']),
-            "nmae": float(best_full['NMAE'])
+            "nmae": float(best_full['NMAE']),
+            "smape": float(best_full['SMAPE']),
+            "mape5": float(best_full['MAPE5'])
         },
         "final_model": {
             "training_data_size": len(X_train),
@@ -87,7 +101,9 @@ def tune_command(args):
             "test_rmse": float(test_rmse),
             "test_mae": float(test_mae),
             "test_nrmse": float(test_nrmse),
-            "test_nmae": float(test_nmae)
+            "test_nmae": float(test_nmae),
+            "test_smape": float(test_smape),
+            "test_mape5": float(test_mape5)
         }
     }
     

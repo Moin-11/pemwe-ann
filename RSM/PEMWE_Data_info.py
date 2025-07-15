@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser(description="PEMWE Data Info")
 parser.add_argument(
     "--csv", 
     type=str, 
-    default="../data.csv", 
+    default="data.csv", 
     help="Path to the dataset CSV file (default: ../data.csv)"
 )
 args = parser.parse_args()

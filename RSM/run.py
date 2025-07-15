@@ -76,7 +76,7 @@ def all_command(args):
 
 def main():
     parser = argparse.ArgumentParser(description="PEMWE RSM Analysis Tool")
-    parser.add_argument("--csv", type=pathlib.Path, default="../data.csv",
+    parser.add_argument("--csv", type=pathlib.Path, default="data.csv",
                         help="Path to CSV file (default: ../data.csv)")
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
